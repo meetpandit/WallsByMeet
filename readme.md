@@ -1,6 +1,6 @@
 # 🧱 WallsByMeet
 
-> A modern online multiplayer strategy game — built by **[@limeetless](https://www.instagram.com/limeetless)**
+> A modern online multiplayer strategy game — built by **[@Meet]([https://www.instagram.com/limeetless](https://www.instagram.com/li_meet_less__))**
 
 [![Play Now](https://img.shields.io/badge/▶%20Play%20Now-Live%20Demo-7c3aed?style=for-the-badge)](https://limeetless.github.io/WallsByMeet)
 [![Made by Meet](https://img.shields.io/badge/Made%20by-Meet-f472b6?style=for-the-badge)](https://www.instagram.com/limeetless)
