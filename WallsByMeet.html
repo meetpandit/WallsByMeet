@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quoridor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-database-compat.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0f0f1a;color:#e0e0ff;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+  #app{width:100%;max-width:900px;padding:16px}
+  /* SCREENS */
+  .screen{display:none;flex-direction:column;align-items:center;gap:20px}
+  .screen.active{display:flex}
+  h1{font-size:2.4rem;background:linear-gradient(135deg,#a78bfa,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:800;letter-spacing:2px}
+  h2{font-size:1.4rem;color:#a78bfa;font-weight:600}
+  .subtitle{color:#888;font-size:.9rem}
+  .btn{padding:12px 28px;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.5px}
+  .btn-primary{background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(124,58,237,.4)}
+  .btn-secondary{background:#1e1e30;color:#a78bfa;border:1px solid #3a3a5c}
+  .btn-secondary:hover{background:#2a2a42;transform:translateY(-1px)}
+  .btn-danger{background:linear-gradient(135deg,#dc2626,#9f1239);color:#fff}
+  .btn-danger:hover{transform:translateY(-2px)}
+  .btn-sm{padding:8px 18px;font-size:.85rem}
+  .mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;width:100%;max-width:520px}
+  .mode-card{background:#1a1a2e;border:2px solid #2a2a4a;border-radius:14px;padding:22px 14px;text-align:center;cursor:pointer;transition:all .2s}
+  .mode-card:hover,.mode-card.selected{border-color:#7c3aed;background:#1e1a3a;transform:translateY(-3px)}
+  .mode-card .icon{font-size:2.2rem;margin-bottom:8px}
+  .mode-card .label{font-size:.9rem;font-weight:600;color:#c4b5fd}
+  .diff-grid{display:flex;gap:12px}
+  .diff-btn{padding:10px 22px;border-radius:8px;border:2px solid #2a2a4a;background:#1a1a2e;color:#a78bfa;cursor:pointer;font-weight:600;transition:all .2s}
+  .diff-btn:hover,.diff-btn.selected{border-color:#7c3aed;background:#1e1a3a}
+  .input-group{display:flex;flex-direction:column;gap:8px;width:100%;max-width:360px}
+  .input-group label{color:#888;font-size:.85rem}
+  .input-group input{background:#1a1a2e;border:2px solid #2a2a4a;border-radius:8px;color:#e0e0ff;padding:10px 14px;font-size:1rem;outline:none}
+  .input-group input:focus{border-color:#7c3aed}
+  .room-code{font-size:2.2rem;font-weight:800;letter-spacing:8px;color:#a78bfa;background:#1a1a2e;padding:14px 28px;border-radius:12px;border:2px solid #3a3a5c}
+  .status-msg{color:#888;font-size:.9rem;text-align:center}
+  .status-msg.ok{color:#34d399}
+  .status-msg.err{color:#f87171}
+  /* GAME LAYOUT */
+  #gameScreen{flex-direction:row;flex-wrap:wrap;gap:20px;justify-content:center;align-items:flex-start}
+  #gameScreen.active{display:flex}
+  .sidebar{display:flex;flex-direction:column;gap:14px;min-width:160px}
+  .player-card{background:#1a1a2e;border:2px solid #2a2a4a;border-radius:12px;padding:14px;transition:all .3s}
+  .player-card.active-turn{border-color:#a78bfa;box-shadow:0 0 16px rgba(167,139,250,.25)}
+  .player-card .pname{font-weight:700;font-size:1rem;margin-bottom:6px}
+  .player-card .walls-left{font-size:.8rem;color:#888}
+  .wall-dots{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px}
+  .wall-dot{width:8px;height:8px;border-radius:2px;background:#7c3aed;transition:all .3s}
+  .wall-dot.used{background:#2a2a4a}
+  .p1-color{color:#f472b6}
+  .p2-color{color:#60a5fa}
+  #turnBanner{background:#1a1a2e;border:2px solid #2a2a4a;border-radius:10px;padding:10px 16px;text-align:center;font-weight:600;font-size:.9rem}
+  #modeToggle{display:flex;gap:0;border-radius:10px;overflow:hidden;border:2px solid #2a2a4a}
+  .toggle-btn{padding:9px 18px;background:#1a1a2e;color:#888;border:none;cursor:pointer;font-weight:600;font-size:.85rem;transition:all .2s}
+  .toggle-btn.active{background:#7c3aed;color:#fff}
+  #gameControls{display:flex;flex-direction:column;gap:8px}
+  /* BOARD */
+  #boardWrap{position:relative}
+  #boardCanvas{border-radius:12px;cursor:pointer;display:block}
+  /* WIN */
+  #winOverlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(6px)}
+  #winOverlay.show{display:flex}
+  #winBox{background:#1a1a2e;border:2px solid #7c3aed;border-radius:20px;padding:40px;text-align:center;display:flex;flex-direction:column;gap:16px;align-items:center}
+  #winBox h2{font-size:2rem;color:#a78bfa}
+  #winBox p{color:#888}
+  .btn-row{display:flex;gap:10px}
+  /* Toast */
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e1e30;border:1px solid #3a3a5c;color:#e0e0ff;padding:10px 20px;border-radius:8px;font-size:.9rem;opacity:0;transition:opacity .3s;pointer-events:none;z-index:200}
+  #toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- HOME -->
+<div class="screen active" id="homeScreen">
+  <h1>QUORIDOR</h1>
+  <p class="subtitle">The ultimate pathfinding strategy game</p>
+  <h2>Choose Mode</h2>
+  <div class="mode-grid">
+    <div class="mode-card" onclick="selectMode('local')"><div class="icon">🎮</div><div class="label">Local Hotseat</div></div>
+    <div class="mode-card" onclick="selectMode('ai')"><div class="icon">🤖</div><div class="label">vs AI</div></div>
+    <div class="mode-card" onclick="selectMode('online')"><div class="icon">🌐</div><div class="label">Online</div></div>
+  </div>
+</div>
+
+<!-- AI SETUP -->
+<div class="screen" id="aiScreen">
+  <h1>QUORIDOR</h1>
+  <h2>vs AI — Choose Difficulty</h2>
+  <div class="diff-grid">
+    <div class="diff-btn" onclick="selectDiff('easy')">😊 Easy</div>
+    <div class="diff-btn" onclick="selectDiff('medium')">🧠 Medium</div>
+    <div class="diff-btn" onclick="selectDiff('hard')">💀 Hard</div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="showScreen('homeScreen')">← Back</button>
+    <button class="btn btn-primary" id="startAiBtn" onclick="startAI()" disabled>Start Game</button>
+  </div>
+</div>
+
+<!-- ONLINE SETUP -->
+<div class="screen" id="onlineScreen">
+  <h1>QUORIDOR</h1>
+  <h2>Online Multiplayer</h2>
+  <div class="mode-grid" style="max-width:340px;grid-template-columns:1fr 1fr">
+    <div class="mode-card" id="createCard" onclick="onlineMode('create')"><div class="icon">➕</div><div class="label">Create Room</div></div>
+    <div class="mode-card" id="joinCard" onclick="onlineMode('join')"><div class="icon">🔗</div><div class="label">Join Room</div></div>
+  </div>
+  <div id="createPanel" style="display:none;flex-direction:column;align-items:center;gap:12px">
+    <p class="status-msg">Your room code:</p>
+    <div class="room-code" id="myRoomCode">—</div>
+    <p class="status-msg" id="createStatus">Waiting for opponent...</p>
+  </div>
+  <div id="joinPanel" style="display:none;flex-direction:column;align-items:center;gap:12px">
+    <div class="input-group">
+      <label>Room Code</label>
+      <input id="joinCodeInput" maxlength="6" placeholder="XXXXXX" oninput="this.value=this.value.toUpperCase()">
+    </div>
+    <button class="btn btn-primary" onclick="joinRoom()">Join</button>
+    <p class="status-msg" id="joinStatus"></p>
+  </div>
+  <div id="randomPanel" style="display:none;flex-direction:column;align-items:center;gap:12px">
+    <p class="status-msg" id="randomStatus">Searching for opponent...</p>
+  </div>
+  <div class="btn-row" style="margin-top:8px">
+    <button class="btn btn-secondary" onclick="cancelOnline()">← Back</button>
+    <button class="btn btn-secondary" onclick="onlineMode('random')">🎲 Random Match</button>
+  </div>
+</div>
+
+<!-- GAME -->
+<div class="screen" id="gameScreen">
+  <div class="sidebar">
+    <div class="player-card" id="p1Card">
+      <div class="pname p1-color">🟣 Player 1</div>
+      <div class="walls-left">Walls: <span id="p1Walls">10</span></div>
+      <div class="wall-dots" id="p1Dots"></div>
+    </div>
+    <div id="turnBanner">Turn: —</div>
+    <div id="modeToggle">
+      <button class="toggle-btn active" id="moveModeBtn" onclick="setActionMode('move')">Move</button>
+      <button class="toggle-btn" id="wallModeBtn" onclick="setActionMode('wall')">Wall</button>
+    </div>
+    <div id="gameControls">
+      <button class="btn btn-secondary btn-sm" onclick="undoMove()">↩ Undo</button>
+      <button class="btn btn-danger btn-sm" onclick="quitGame()">🚪 Quit</button>
+    </div>
+    <div class="status-msg" id="gameStatus"></div>
+  </div>
+  <div id="boardWrap">
+    <canvas id="boardCanvas"></canvas>
+  </div>
+  <div class="sidebar">
+    <div class="player-card" id="p2Card">
+      <div class="pname p2-color">🔵 Player 2</div>
+      <div class="walls-left">Walls: <span id="p2Walls">10</span></div>
+      <div class="wall-dots" id="p2Dots"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- WIN OVERLAY -->
+<div id="winOverlay">
+  <div id="winBox">
+    <h2 id="winTitle">🏆 Player 1 Wins!</h2>
+    <p id="winSub">Reached the other side!</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="rematch()">🔄 Rematch</button>
+      <button class="btn btn-secondary" onclick="quitGame()">🏠 Menu</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+// ── Firebase config (public demo project) ──
+const fbConfig = {
+  apiKey:"AIzaSyDummyKeyForQuoridor",
+  databaseURL:"https://quoridor-online-default-rtdb.firebaseio.com"
+};
+let db=null;
+function initFB(){
+  if(db)return;
+  try{
+    const app=firebase.initializeApp(fbConfig);
+    db=firebase.database(app);
+  }catch(e){db=null;}
+}
+
+// ── Constants ──
+const CELLS=9, WALL_SLOTS=8;
+const CELL=52, GAP=8, WALL_W=8;
+const TOTAL=CELLS*CELL+(WALL_SLOTS)*GAP;
+const PAD=20;
+
+// ── State ──
+let gameMode='local', aiDifficulty='medium';
+let board, history;
+let actionMode='move';
+let hoverInfo=null;
+let myPlayer=1; // for online: which player am I?
+let onlineRoom=null, onlineRef=null, onlineListener=null;
+let aiThinking=false;
+
+function initBoard(){
+  board={
+    pawns:[null,{r:0,c:4},{r:8,c:4}], // 1-indexed
+    walls:[], // {r,c,dir:'h'|'v'}
+    wallsLeft:[null,10,10],
+    turn:1,
+    winner:0
+  };
+  history=[];
+}
+
+// ── Screen Management ──
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function selectMode(m){
+  gameMode=m;
+  if(m==='local'){startLocal();}
+  else if(m==='ai'){showScreen('aiScreen');}
+  else{initFB();showScreen('onlineScreen');}
+}
+
+function selectDiff(d){
+  aiDifficulty=d;
+  document.querySelectorAll('.diff-btn').forEach(b=>{b.classList.remove('selected');if(b.textContent.toLowerCase().includes(d))b.classList.add('selected');});
+  document.getElementById('startAiBtn').disabled=false;
+}
+
+// ── Game Start ──
+function startLocal(){
+  gameMode='local';
+  initBoard();
+  showScreen('gameScreen');
+  setupCanvas();
+  renderGame();
+}
+
+function startAI(){
+  gameMode='ai';
+  initBoard();
+  showScreen('gameScreen');
+  setupCanvas();
+  renderGame();
+}
+
+function setupCanvas(){
+  const cvs=document.getElementById('boardCanvas');
+  const sz=TOTAL+PAD*2;
+  cvs.width=sz; cvs.height=sz;
+  cvs.onclick=onCanvasClick;
+  cvs.onmousemove=onCanvasHover;
+  cvs.onmouseleave=()=>{hoverInfo=null;renderGame();};
+}
+
+// ── Coordinate helpers ──
+function cellToXY(r,c){
+  return {x:PAD+c*(CELL+GAP), y:PAD+r*(CELL+GAP)};
+}
+function xyToCell(px,py){
+  // returns {type:'cell',r,c} or {type:'wall',r,c,dir} or null
+  const x=px-PAD, y=py-PAD;
+  if(x<0||y<0||x>TOTAL||y>TOTAL)return null;
+  const cxI=Math.floor(x/(CELL+GAP)), cyI=Math.floor(y/(CELL+GAP));
+  const cxR=x%(CELL+GAP), cyR=y%(CELL+GAP);
+  const inCellX=cxR<CELL, inCellY=cyR<CELL;
+  if(inCellX&&inCellY)return{type:'cell',r:cyI,c:cxI};
+  // wall gap
+  if(!inCellX&&inCellY&&cxI<WALL_SLOTS){
+    // vertical wall between col cxI and cxI+1
+    return{type:'wall',r:cyI,c:cxI,dir:'v'};
+  }
+  if(inCellX&&!inCellY&&cyI<WALL_SLOTS){
+    return{type:'wall',r:cyI,c:cxI,dir:'h'};
+  }
+  return null;
+}
+
+// ── Wall logic ──
+function wallExists(walls,r,c,dir){
+  return walls.some(w=>w.dir===dir&&w.r===r&&w.c===c);
+}
+
+function wallBlocks(walls,r,c,nr,nc){
+  // moving from (r,c) to (nr,nc): check if any wall blocks
+  if(nr===r+1){ // moving down
+    // blocked by horizontal wall at r,c or r,c-1 (if c>0)
+    return wallExists(walls,r,c,'h')||(c>0&&wallExists(walls,r,c-1,'h'));
+  }
+  if(nr===r-1){ // moving up
+    return wallExists(walls,r-1,c,'h')||(c>0&&wallExists(walls,r-1,c-1,'h'));
+  }
+  if(nc===c+1){ // moving right
+    return wallExists(walls,r,c,'v')||(r>0&&wallExists(walls,r-1,c,'v'));
+  }
+  if(nc===c-1){ // moving left
+    return wallExists(walls,r,c-1,'v')||(r>0&&wallExists(walls,r-1,c-1,'v'));
+  }
+  return false;
+}
+
+function getNeighbors(walls,r,c){
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+  const res=[];
+  for(const[dr,dc]of dirs){
+    const nr=r+dr,nc=c+dc;
+    if(nr<0||nr>=CELLS||nc<0||nc>=CELLS)continue;
+    if(!wallBlocks(walls,r,c,nr,nc))res.push([nr,nc]);
+  }
+  return res;
+}
+
+function bfsPath(walls,sr,sc,targetRow){
+  // returns true if path exists from (sr,sc) to any cell in targetRow
+  const visited=Array.from({length:CELLS},()=>Array(CELLS).fill(false));
+  const q=[[sr,sc]];
+  visited[sr][sc]=true;
+  while(q.length){
+    const[r,c]=q.shift();
+    if(r===targetRow)return true;
+    for(const[nr,nc]of getNeighbors(walls,r,c)){
+      if(!visited[nr][nc]){visited[nr][nc]=true;q.push([nr,nc]);}
+    }
+  }
+  return false;
+}
+
+function pathLength(walls,sr,sc,targetRow){
+  const visited=Array.from({length:CELLS},()=>Array(CELLS).fill(false));
+  const q=[[sr,sc,0]];
+  visited[sr][sc]=true;
+  while(q.length){
+    const[r,c,d]=q.shift();
+    if(r===targetRow)return d;
+    for(const[nr,nc]of getNeighbors(walls,r,c)){
+      if(!visited[nr][nc]){visited[nr][nc]=true;q.push([nr,nc,d+1]);}
+    }
+  }
+  return 999;
+}
+
+function canPlaceWall(walls,wr,wc,dir){
+  if(wr<0||wc<0||wr>=WALL_SLOTS||wc>=WALL_SLOTS)return false;
+  if(wallExists(walls,wr,wc,dir))return false;
+  // prevent overlap
+  if(dir==='h'){
+    if(wc+1<WALL_SLOTS&&wallExists(walls,wr,wc+1,dir))return false;
+    if(wc-1>=0&&wallExists(walls,wr,wc-1,dir))return false;
+    if(wallExists(walls,wr,wc,'v'))return false;
+  } else {
+    if(wr+1<WALL_SLOTS&&wallExists(walls,wr+1,wc,dir))return false;
+    if(wr-1>=0&&wallExists(walls,wr-1,wc,dir))return false;
+    if(wallExists(walls,wr,wc,'h'))return false;
+  }
+  // path check
+  const testWalls=[...walls,{r:wr,c:wc,dir}];
+  const p1=board.pawns[1], p2=board.pawns[2];
+  if(!bfsPath(testWalls,p1.r,p1.c,8))return false;
+  if(!bfsPath(testWalls,p2.r,p2.c,0))return false;
+  return true;
+}
+
+function getValidMoves(pawns,walls,p){
+  const {r,c}=pawns[p];
+  const op=p===1?2:1;
+  const opp=pawns[op];
+  const basic=getNeighbors(walls,r,c);
+  const moves=[];
+  for(const[nr,nc]of basic){
+    if(nr===opp.r&&nc===opp.c){
+      // jump
+      const[jr,jc]=[nr+(nr-r),nc+(nc-c)];
+      let jumped=false;
+      if(jr>=0&&jr<CELLS&&jc>=0&&jc<CELLS&&!wallBlocks(walls,nr,nc,jr,jc)){
+        moves.push([jr,jc]);jumped=true;
+      }
+      if(!jumped){
+        // side jumps
+        const sides=getNeighbors(walls,nr,nc).filter(([sr,sc])=>!(sr===r&&sc===c)&&!(sr===jr&&sc===jc));
+        for(const[sr,sc]of sides)moves.push([sr,sc]);
+      }
+    } else {
+      moves.push([nr,nc]);
+    }
+  }
+  return moves;
+}
+
+// ── Actions ──
+function applyMove(state,move){
+  // move: {type:'pawn',r,c} or {type:'wall',r,c,dir}
+  const s=deepClone(state);
+  if(move.type==='pawn'){
+    s.pawns[s.turn]={r:move.r,c:move.c};
+    if((s.turn===1&&move.r===8)||(s.turn===2&&move.r===0))s.winner=s.turn;
+  } else {
+    s.walls.push({r:move.r,c:move.c,dir:move.dir});
+    s.wallsLeft[s.turn]--;
+  }
+  s.turn=s.turn===1?2:1;
+  return s;
+}
+
+function deepClone(o){return JSON.parse(JSON.stringify(o));}
+
+function makeMove(move){
+  if(board.winner)return;
+  history.push(deepClone(board));
+  board=applyMove(board,move);
+  renderGame();
+  if(board.winner){showWin(board.winner);return;}
+  if(gameMode==='online')syncOnline(move);
+  if(gameMode==='ai'&&board.turn===2&&!board.winner){
+    setTimeout(doAIMove,400);
+  }
+}
+
+function undoMove(){
+  if(gameMode==='online')return toast('Cannot undo in online mode');
+  if(gameMode==='ai'&&history.length>=2){
+    history.pop();board=history.pop();
+  } else if(history.length){
+    board=history.pop();
+  } else return;
+  renderGame();
+}
+
+// ── Input ──
+function setActionMode(m){
+  actionMode=m;
+  document.getElementById('moveModeBtn').classList.toggle('active',m==='move');
+  document.getElementById('wallModeBtn').classList.toggle('active',m==='wall');
+  hoverInfo=null;renderGame();
+}
+
+function onCanvasClick(e){
+  if(board.winner)return;
+  if(gameMode==='online'&&board.turn!==myPlayer)return;
+  if(gameMode==='ai'&&board.turn===2)return;
+  const rect=e.target.getBoundingClientRect();
+  const px=e.clientX-rect.left,py=e.clientY-rect.top;
+  const hit=xyToCell(px,py);
+  if(!hit)return;
+  if(actionMode==='move'&&hit.type==='cell'){
+    const valid=getValidMoves(board.pawns,board.walls,board.turn);
+    if(valid.some(([r,c])=>r===hit.r&&c===hit.c)){
+      makeMove({type:'pawn',r:hit.r,c:hit.c});
+    }
+  } else if(actionMode==='wall'&&hit.type==='wall'){
+    if(board.wallsLeft[board.turn]<=0)return toast('No walls left!');
+    if(canPlaceWall(board.walls,hit.r,hit.c,hit.dir)){
+      makeMove({type:'wall',r:hit.r,c:hit.c,dir:hit.dir});
+    } else toast('Invalid wall placement');
+  }
+}
+
+function onCanvasHover(e){
+  if(board.winner)return;
+  const rect=e.target.getBoundingClientRect();
+  const px=e.clientX-rect.left,py=e.clientY-rect.top;
+  hoverInfo=xyToCell(px,py);
+  renderGame();
+}
+
+// ── Rendering ──
+const COLORS={
+  bg:'#0d0d1a',
+  cell:'#1a1a2e',
+  cellHover:'#2a2a4a',
+  validMove:'rgba(167,139,250,0.25)',
+  validMoveBorder:'#a78bfa',
+  p1:'#f472b6',
+  p2:'#60a5fa',
+  wallH:'#f59e0b',
+  wallV:'#f59e0b',
+  wallPreviewOk:'rgba(245,158,11,0.5)',
+  wallPreviewBad:'rgba(239,68,68,0.4)',
+  goalP1:'rgba(96,165,250,0.12)',
+  goalP2:'rgba(244,114,182,0.12)',
+};
+
+function renderGame(){
+  const cvs=document.getElementById('boardCanvas');
+  const ctx=cvs.getContext('2d');
+  const sz=cvs.width;
+  ctx.clearRect(0,0,sz,sz);
+  ctx.fillStyle=COLORS.bg;
+  ctx.fillRect(0,0,sz,sz);
+
+  const valid=getValidMoves(board.pawns,board.walls,board.turn);
+  const validSet=new Set(valid.map(([r,c])=>`${r},${c}`));
+
+  // goal rows
+  ctx.fillStyle=COLORS.goalP1;
+  const {x:gx1,y:gy1}=cellToXY(8,0);
+  ctx.fillRect(PAD,gy1,TOTAL,CELL);
+  ctx.fillStyle=COLORS.goalP2;
+  const {x:gx2,y:gy2}=cellToXY(0,0);
+  ctx.fillRect(PAD,gy2,TOTAL,CELL);
+
+  // cells
+  for(let r=0;r<CELLS;r++){
+    for(let c=0;c<CELLS;c++){
+      const {x,y}=cellToXY(r,c);
+      const isValid=validSet.has(`${r},${c}`);
+      const isHover=hoverInfo&&hoverInfo.type==='cell'&&hoverInfo.r===r&&hoverInfo.c===c&&actionMode==='move';
+      ctx.fillStyle=isValid?COLORS.validMove:(isHover?COLORS.cellHover:COLORS.cell);
+      roundRect(ctx,x,y,CELL,CELL,6);
+      if(isValid){
+        ctx.strokeStyle=COLORS.validMoveBorder;
+        ctx.lineWidth=2;
+        ctx.stroke();
+      }
+    }
+  }
+
+  // walls
+  for(const w of board.walls){
+    drawWall(ctx,w.r,w.c,w.dir,COLORS.wallH,1);
+  }
+
+  // wall preview
+  if(actionMode==='wall'&&hoverInfo&&hoverInfo.type==='wall'){
+    const{r,c,dir}=hoverInfo;
+    const ok=board.wallsLeft[board.turn]>0&&canPlaceWall(board.walls,r,c,dir);
+    drawWall(ctx,r,c,dir,ok?COLORS.wallPreviewOk:COLORS.wallPreviewBad,0.7);
+  }
+
+  // pawns
+  drawPawn(ctx,board.pawns[1],COLORS.p1,1);
+  drawPawn(ctx,board.pawns[2],COLORS.p2,2);
+
+  // UI
+  updateUI();
+}
+
+function drawWall(ctx,r,c,dir,color,alpha=1){
+  ctx.globalAlpha=alpha;
+  ctx.fillStyle=color;
+  if(dir==='h'){
+    const {x,y}=cellToXY(r,c);
+    roundRect(ctx,x,y+CELL,CELL*2+GAP,WALL_W,3);
+    ctx.fill();
+  } else {
+    const {x,y}=cellToXY(r,c);
+    roundRect(ctx,x+CELL,y,WALL_W,CELL*2+GAP,3);
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawPawn(ctx,pos,color,pid){
+  if(!pos)return;
+  const {x,y}=cellToXY(pos.r,pos.c);
+  const cx=x+CELL/2,cy=y+CELL/2,rad=CELL*0.35;
+  ctx.shadowColor=color;ctx.shadowBlur=16;
+  ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);
+  ctx.fillStyle=color;ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(0,0,0,0.5)';
+  ctx.font=`bold ${CELL*0.28}px Segoe UI`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('P'+pid,cx,cy);
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();ctx.fill();
+}
+
+function updateUI(){
+  const t=board.turn;
+  document.getElementById('p1Walls').textContent=board.wallsLeft[1];
+  document.getElementById('p2Walls').textContent=board.wallsLeft[2];
+  document.getElementById('p1Card').classList.toggle('active-turn',t===1);
+  document.getElementById('p2Card').classList.toggle('active-turn',t===2);
+  const names=['Player 1','Player 2'];
+  document.getElementById('turnBanner').textContent=`Turn: ${names[t-1]}`;
+  // wall dots
+  for(let p=1;p<=2;p++){
+    const el=document.getElementById(`p${p}Dots`);
+    el.innerHTML='';
+    for(let i=0;i<10;i++){
+      const d=document.createElement('div');
+      d.className='wall-dot'+(i>=board.wallsLeft[p]?' used':'');
+      el.appendChild(d);
+    }
+  }
+  // disable wall mode if no walls
+  document.getElementById('wallModeBtn').disabled=board.wallsLeft[t]<=0;
+  // status
+  let st='';
+  if(gameMode==='online'){
+    st=board.turn===myPlayer?'Your turn':'Opponent\'s turn';
+  } else if(gameMode==='ai'&&board.turn===2){
+    st='AI thinking...';
+  }
+  document.getElementById('gameStatus').textContent=st;
+}
+
+function showWin(p){
+  const names=['Player 1', gameMode==='ai'?'AI':'Player 2'];
+  document.getElementById('winTitle').textContent=`🏆 ${names[p-1]} Wins!`;
+  document.getElementById('winSub').textContent='Reached the opposite side!';
+  document.getElementById('winOverlay').classList.add('show');
+}
+
+function rematch(){
+  document.getElementById('winOverlay').classList.remove('show');
+  if(gameMode==='online'){
+    // reset online state
+    initBoard();
+    if(onlineRef)onlineRef.set(boardToFirebase(board));
+    renderGame();
+  } else {
+    initBoard();renderGame();
+  }
+}
+
+function quitGame(){
+  document.getElementById('winOverlay').classList.remove('show');
+  cancelOnline();
+  showScreen('homeScreen');
+}
+
+// ── AI ──
+function doAIMove(){
+  if(board.winner||board.turn!==2)return;
+  aiThinking=true;
+  const move=aiChooseMove(board,aiDifficulty);
+  aiThinking=false;
+  makeMove(move);
+}
+
+function aiChooseMove(state,diff){
+  if(diff==='easy')return aiEasy(state);
+  if(diff==='medium')return aiMedium(state);
+  return aiHard(state);
+}
+
+function aiEasy(state){
+  // random legal move
+  const moves=getValidMoves(state.pawns,state.walls,2);
+  if(Math.random()<0.3&&state.wallsLeft[2]>0){
+    const wm=randomWall(state);
+    if(wm)return wm;
+  }
+  const[r,c]=moves[Math.floor(Math.random()*moves.length)];
+  return{type:'pawn',r,c};
+}
+
+function aiMedium(state){
+  // prefer shortest path move; occasionally place wall
+  const myPath=pathLength(state.walls,state.pawns[2].r,state.pawns[2].c,0);
+  const oppPath=pathLength(state.walls,state.pawns[1].r,state.pawns[1].c,8);
+  // if I'm close, just move
+  if(myPath<=2||(Math.random()<0.7||state.wallsLeft[2]===0)){
+    return bestPawnMove(state,2);
+  }
+  // try to place a wall that hurts opponent
+  const wm=bestWall(state,2);
+  return wm||bestPawnMove(state,2);
+}
+
+function aiHard(state){
+  // minimax depth 2
+  const myPath=pathLength(state.walls,state.pawns[2].r,state.pawns[2].c,0);
+  if(myPath<=1)return bestPawnMove(state,2);
+  return minimaxRoot(state,2);
+}
+
+function bestPawnMove(state,p){
+  const goal=p===1?8:0;
+  const moves=getValidMoves(state.pawns,state.walls,p);
+  let best=null,bestD=999;
+  for(const[r,c]of moves){
+    const tp=deepClone(state.pawns);tp[p]={r,c};
+    const d=pathLength(state.walls,r,c,goal);
+    if(d<bestD){bestD=d;best={type:'pawn',r,c};}
+  }
+  return best||{type:'pawn',r:moves[0][0],c:moves[0][1]};
+}
+
+function randomWall(state){
+  for(let t=0;t<20;t++){
+    const r=Math.floor(Math.random()*WALL_SLOTS);
+    const c=Math.floor(Math.random()*WALL_SLOTS);
+    const dir=Math.random()<0.5?'h':'v';
+    if(canPlaceWall(state.walls,r,c,dir))return{type:'wall',r,c,dir};
+  }
+  return null;
+}
+
+function bestWall(state,p){
+  const op=p===1?2:1;
+  const opGoal=op===1?8:0;
+  let best=null,bestDelta=-Infinity;
+  const basePath=pathLength(state.walls,state.pawns[op].r,state.pawns[op].c,opGoal);
+  // sample walls
+  for(let r=0;r<WALL_SLOTS;r++){
+    for(let c=0;c<WALL_SLOTS;c++){
+      for(const dir of['h','v']){
+        if(canPlaceWall(state.walls,r,c,dir)){
+          const tw=[...state.walls,{r,c,dir}];
+          const newPath=pathLength(tw,state.pawns[op].r,state.pawns[op].c,opGoal);
+          const delta=newPath-basePath;
+          if(delta>bestDelta){bestDelta=delta;best={type:'wall',r,c,dir};}
+        }
+      }
+    }
+  }
+  return bestDelta>1?best:null;
+}
+
+function minimaxRoot(state,p){
+  // evaluate all pawn moves + top wall moves
+  const candidates=[];
+  const moves=getValidMoves(state.pawns,state.walls,p);
+  for(const[r,c]of moves)candidates.push({type:'pawn',r,c});
+  if(state.wallsLeft[p]>0){
+    // add best wall
+    const bw=bestWall(state,p);
+    if(bw)candidates.push(bw);
+  }
+  let best=null,bestScore=-Infinity;
+  for(const mv of candidates){
+    const ns=applyMove(state,mv);
+    const score=evalState(ns,p);
+    if(score>bestScore){bestScore=score;best=mv;}
+  }
+  return best||bestPawnMove(state,p);
+}
+
+function evalState(state,p){
+  const op=p===1?2:1;
+  const myGoal=p===1?8:0;
+  const opGoal=op===1?8:0;
+  const myD=pathLength(state.walls,state.pawns[p].r,state.pawns[p].c,myGoal);
+  const opD=pathLength(state.walls,state.pawns[op].r,state.pawns[op].c,opGoal);
+  return opD-myD;
+}
+
+// ── Online Multiplayer ──
+let onlineSubMode='';
+
+function onlineMode(m){
+  onlineSubMode=m;
+  document.getElementById('createPanel').style.display='none';
+  document.getElementById('joinPanel').style.display='none';
+  document.getElementById('randomPanel').style.display='none';
+  if(m==='create'){
+    document.getElementById('createPanel').style.display='flex';
+    createRoom();
+  } else if(m==='join'){
+    document.getElementById('joinPanel').style.display='flex';
+  } else {
+    document.getElementById('randomPanel').style.display='flex';
+    joinRandom();
+  }
+}
+
+function genCode(){
+  return Math.random().toString(36).substring(2,8).toUpperCase();
+}
+
+function boardToFirebase(b){
+  return{
+    pawns:b.pawns,walls:b.walls,wallsLeft:b.wallsLeft,turn:b.turn,winner:b.winner,
+    lastMove:null
+  };
+}
+
+function createRoom(){
+  if(!db){toast('Firebase not available. Try again.');return;}
+  const code=genCode();
+  document.getElementById('myRoomCode').textContent=code;
+  document.getElementById('createStatus').textContent='Waiting for opponent...';
+  onlineRoom=code;
+  myPlayer=1;
+  initBoard();
+  const ref=db.ref('rooms/'+code);
+  ref.set({...boardToFirebase(board),p1joined:true,p2joined:false});
+  onlineRef=ref;
+  ref.on('value',snap=>{
+    const data=snap.val();
+    if(!data)return;
+    if(data.p2joined&&!data.gameStarted){
+      ref.update({gameStarted:true});
+      document.getElementById('createStatus').textContent='Opponent joined! Starting...';
+      setTimeout(()=>startOnlineGame(data),800);
+    }
+    if(data.gameStarted){
+      receiveOnlineState(data);
+    }
+  });
+}
+
+function joinRoom(){
+  const code=document.getElementById('joinCodeInput').value.trim();
+  if(code.length!==6){toast('Enter a 6-character code');return;}
+  if(!db){toast('Firebase not available.');return;}
+  const ref=db.ref('rooms/'+code);
+  ref.once('value').then(snap=>{
+    const data=snap.val();
+    if(!data){document.getElementById('joinStatus').textContent='Room not found';document.getElementById('joinStatus').className='status-msg err';return;}
+    if(data.p2joined){document.getElementById('joinStatus').textContent='Room is full';document.getElementById('joinStatus').className='status-msg err';return;}
+    onlineRoom=code;myPlayer=2;onlineRef=ref;
+    ref.update({p2joined:true});
+    document.getElementById('joinStatus').textContent='Joined! Waiting for host...';
+    document.getElementById('joinStatus').className='status-msg ok';
+    ref.on('value',snap2=>{
+      const d=snap2.val();
+      if(!d)return;
+      if(d.gameStarted)receiveOnlineState(d);
+    });
+  });
+}
+
+function joinRandom(){
+  if(!db){toast('Firebase not available.');return;}
+  document.getElementById('randomStatus').textContent='Searching...';
+  const qRef=db.ref('matchQueue');
+  qRef.once('value').then(snap=>{
+    const q=snap.val()||{};
+    const waiting=Object.keys(q).find(k=>q[k].waiting);
+    if(waiting){
+      // join existing
+      db.ref('matchQueue/'+waiting).remove();
+      onlineRoom=waiting;myPlayer=2;
+      onlineRef=db.ref('rooms/'+waiting);
+      onlineRef.update({p2joined:true});
+      document.getElementById('randomStatus').textContent='Found opponent!';
+      onlineRef.on('value',snap2=>{
+        const d=snap2.val();
+        if(d&&d.gameStarted)receiveOnlineState(d);
+      });
+    } else {
+      // create and wait
+      const code=genCode();
+      onlineRoom=code;myPlayer=1;
+      initBoard();
+      onlineRef=db.ref('rooms/'+code);
+      onlineRef.set({...boardToFirebase(board),p1joined:true,p2joined:false});
+      db.ref('matchQueue/'+code).set({waiting:true,ts:Date.now()});
+      document.getElementById('randomStatus').textContent='Waiting for opponent... Code: '+code;
+      onlineRef.on('value',snap2=>{
+        const d=snap2.val();
+        if(!d)return;
+        if(d.p2joined&&!d.gameStarted){
+          db.ref('matchQueue/'+code).remove();
+          onlineRef.update({gameStarted:true});
+          setTimeout(()=>startOnlineGame(d),800);
+        }
+        if(d.gameStarted)receiveOnlineState(d);
+      });
+    }
+  });
+}
+
+function startOnlineGame(data){
+  initBoard();
+  showScreen('gameScreen');
+  setupCanvas();
+  renderGame();
+}
+
+function receiveOnlineState(data){
+  if(!data)return;
+  const prevWinner=board?board.winner:0;
+  board={
+    pawns:data.pawns||board.pawns,
+    walls:data.walls||[],
+    wallsLeft:data.wallsLeft||[null,10,10],
+    turn:data.turn||1,
+    winner:data.winner||0
+  };
+  // ensure screen
+  const gs=document.getElementById('gameScreen');
+  if(!gs.classList.contains('active')){
+    showScreen('gameScreen');
+    setupCanvas();
+  }
+  renderGame();
+  if(board.winner&&!prevWinner)showWin(board.winner);
+}
+
+function syncOnline(move){
+  if(!onlineRef)return;
+  onlineRef.set({...boardToFirebase(board),gameStarted:true,p1joined:true,p2joined:true});
+}
+
+function cancelOnline(){
+  if(onlineRef)onlineRef.off();
+  onlineRef=null;onlineRoom=null;
+  document.getElementById('createPanel').style.display='none';
+  document.getElementById('joinPanel').style.display='none';
+  document.getElementById('randomPanel').style.display='none';
+  showScreen('homeScreen');
+}
+
+// ── Toast ──
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+// ── Init ──
+showScreen('homeScreen');
+</script>
+</body>
+</html>
